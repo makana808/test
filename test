@@ -1,130 +1,41 @@
 -- ======================================================================
--- MINER CORE ENGINE: main.lua (Dot Notation Pathing Patch)
+-- SWARM FLEET AUTO-UPDATER & RUNTIME ENGINE: startup.lua
 -- ======================================================================
 
--- FIXED: Folder structure pathing resolved via standard dot-notation
-local State = require("miner.state")
-local Nav = require("miner.nav")
+local modules = {
+    { path = "miner/state.lua", code = "jKP86HDQ", name = "Persistency Kernel" },
+    { path = "miner/nav.lua",   code = "7b15x0RL", name = "Smart Transit Engine" },
+    { path = "miner/main.lua",  code = "Mm7DgiA1", name = "Main Task Loop Executive" }
+}
 
-local TELEMETRY_PROTOCOL = "swarm_telemetry"
-local COMMAND_PROTOCOL = "swarm_command"
+print("⚙️ Verifying swarm system modules...")
 
-rednet.open("right") 
-State.init("MINER")  
-
-local function sendTelemetry()
-    rednet.broadcast({
-        id = os.getComputerID(),
-        name = os.getComputerLabel() or ("Miner #" .. os.getComputerID()),
-        role = State.data.role,
-        state = State.data.taskState,
-        x = State.data.curX, y = State.data.curY, z = State.data.curZ,
-        fuel = turtle.getFuelLevel(),
-        progress = State.data.progress,
-        totalSteps = State.data.totalSteps
-    }, TELEMETRY_PROTOCOL)
+-- Explicitly guarantee directory creation before downloading
+if not fs.exists("miner") then 
+    fs.makeDir("miner") 
 end
 
-local function executeBasePurge()
-    State.data.taskState = "GOING_HOME"
-    
-    -- Line up 3 blocks away on its unique approach track axis
-    local approachZ = State.data.homeZ - 3
-    Nav.navigateTo(State.data.homeX, State.data.homeY, approachZ)
-    
-    -- Glide back slowly without digging into its private garage slot
-    Nav.face(3)
-    while State.data.curZ < State.data.homeZ do Nav.forward(false) end
-    
-    -- 1. PURGE CARGO: All slots empty directly out the back (Face South)
-    State.data.taskState = "PURGING_CARGO" sendTelemetry()
-    Nav.face(3) 
-    for slot = 1, 16 do
-        if slot ~= 3 then -- Retain slot 3 exclusively for your fuel cycling buffer
-            if turtle.getItemCount(slot) > 0 then
-                turtle.select(slot)
-                turtle.drop()
-            end
-        end
+for _, mod in ipairs(modules) do
+    if fs.exists(mod.path) then 
+        fs.delete(mod.path) 
     end
     
-    -- 2. REFUEL CARGO: Pull from top barrel (Face North, suck from above)
-    State.data.taskState = "RESTOCK_SUPPLIES" sendTelemetry()
-    Nav.face(1) 
-    turtle.select(3)
-    while turtle.getFuelLevel() < 40000 do 
-        if turtle.suckUp() then 
-            turtle.refuel() 
-        else 
-            sleep(2) 
-        end 
-    end
-    if turtle.getItemCount(3) > 0 then turtle.dropUp() end -- Clear extra fuel out
+    print(string.format("📡 Fetching: %s...", mod.name))
+    local success = shell.run("pastebin", "get", mod.code, mod.path)
     
-    -- Reset parameters
-    Nav.face(1)
-    State.data.currentJob = nil
-    State.data.taskState = "AWAITING_JOB"
-    State.data.progress, State.data.totalSteps = 0, 0
-    State.save()
-end
-
-local function mineJobExecution(job)
-    State.data.currentJob = job
-    State.data.totalSteps = tonumber(job.count) or 1
-    State.data.progress = 0
-    
-    -- RUNWAY CLEARANCE: Move 4 blocks out safely before turning or digging
-    Nav.runwayLaunch()
-    
-    State.data.taskState = "EN_ROUTE"
-    Nav.navigateTo(job.startX, job.startY, job.startZ)
-    
-    State.data.taskState = "MINING_STRIP"
-    for step = 1, State.data.totalSteps do
-        if State.data.taskState == "GOING_HOME" then break end
-        
-        Nav.face(job.isAlt and 2 or 4)
-        turtle.dig()
-        
-        State.data.progress = step
-        State.save() sendTelemetry()
-        
-        if step < State.data.totalSteps then Nav.forward(true) end
-    end
-    
-    executeBasePurge()
-end
-
-local function workerLoop()
-    while true do
-        if State.data.taskState == "GOING_HOME" then
-            executeBasePurge()
-        elseif State.data.currentJob then
-            mineJobExecution(State.data.currentJob)
-        else
-            State.data.taskState = "AWAITING_JOB"
-            sendTelemetry()
-            sleep(2)
-        end
+    if not success or not fs.exists(mod.path) then
+        error(string.format("\n❌ Error downloading %s!", mod.path))
     end
 end
 
-local function commandLoop()
-    while true do
-        local id, msg, protocol = rednet.receive()
-        if protocol == COMMAND_PROTOCOL and type(msg) == "table" then
-            if msg.command == "RECALL" then
-                State.data.taskState = "GOING_HOME"
-                State.save()
-            elseif msg.command == "ASSIGN" and not State.data.currentJob then
-                State.data.currentJob = msg.job
-                State.save()
-            end
-        elseif os.pullEvent() == "telemetry_update" then
-            sendTelemetry()
-        end
-    end
-end
+print("✅ All drone modules updated successfully!")
+print("🚀 Injecting path matrix solutions...")
+sleep(0.5)
 
-parallel.waitForAny(workerLoop, commandLoop)
+-- ======================================================================
+-- THE ONE-LINE PATH FIX (Bypasses modifying your other modules)
+-- ======================================================================
+package.path = package.path .. ";/?.lua;/?/init.lua"
+
+-- Run main loop directly from the root context
+shell.run("miner/main.lua")
