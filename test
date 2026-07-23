@@ -1,0 +1,39 @@
+-- ======================================================================
+-- SWARM FLEET AUTO-UPDATER & RUNTIME ENGINE: startup.lua
+-- ======================================================================
+
+local modules = {
+    { path = "miner/state.lua", code = "jKP86HDQ", name = "Persistency Kernel" },
+    { path = "miner/nav.lua",   code = "7b15x0RL", name = "Smart Transit Engine" },
+    { path = "miner/main.lua",  code = "Mm7DgiA1", name = "Main Task Loop Executive" }
+}
+
+print("⚙️ Verifying swarm system modules...")
+
+-- CRITICAL FIX: Explicitly guarantee directory creation before downloading
+if not fs.exists("miner") then 
+    fs.makeDir("miner") 
+end
+
+for _, mod in ipairs(modules) do
+    -- Force clear old local files to guarantee a fresh hotfix download
+    if fs.exists(mod.path) then 
+        fs.delete(mod.path) 
+    end
+    
+    print(string.format("📡 Fetching: %s...", mod.name))
+    
+    -- Use native CC shell hook to accurately preserve case-sensitive hashes
+    local success = shell.run("pastebin", "get", mod.code, mod.path)
+    
+    if not success or not fs.exists(mod.path) then
+        error(string.format("\n❌ Error downloading %s!\nCheck code casing or server HTTP configs.", mod.path))
+    end
+end
+
+print("✅ All drone modules updated successfully!")
+print("🚀 Spooling up Swarm Core Engine...\n")
+sleep(1)
+
+-- Hand off execution directly to the newly downloaded main loop
+shell.run("miner/main.lua")
