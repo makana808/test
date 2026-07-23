@@ -29,13 +29,14 @@ for _, mod in ipairs(modules) do
 end
 
 print("✅ All drone modules updated successfully!")
-print("🚀 Injecting path matrix solutions...")
+print("🚀 Forcing local module registry override...")
 sleep(0.5)
 
 -- ======================================================================
--- THE ONE-LINE PATH FIX (Bypasses modifying your other modules)
+-- FORCE THE PACKAGE REGISTRY (Tricks require() into finding your files)
 -- ======================================================================
-package.path = package.path .. ";/?.lua;/?/init.lua"
+package.loaded["miner.state"] = dofile("miner/state.lua")
+package.loaded["miner.nav"]   = dofile("miner/nav.lua")
 
--- Run main loop directly from the root context
+-- Run your main loop script
 shell.run("miner/main.lua")
